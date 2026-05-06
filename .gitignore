@@ -2,6 +2,16 @@
 .DS_Store
 Thumbs.db
 
+## Node/Vite
+node_modules/
+dist/
+dev-server*.log
+.env
+.env.*
+!.env.example
+.next/
+.next-local/
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
@@ -303,3 +313,4 @@ TSWLatexianTemp*
 # option is specified. Footnotes are the stored in a file with suffix Notes.bib.
 # Uncomment the next line to have this generated file ignored.
 #*Notes.bib
+.vercel
