@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { PaymentButtons } from "@/components/PaymentButtons";
 import { autoImproveResume, composeResumeText, localOptimizeResume, normalizeResume, sampleResume, scoreResume, shouldApplyEnhancedResume } from "@/lib/resume";
 
@@ -24,12 +25,13 @@ const PDF_ACTION_VERBS = ["Developed", "Implemented", "Optimized", "Integrated",
 const PDF_SOFT_SKILLS = "Soft Skills: Communication, Problem Solving, Teamwork, Time Management";
 const PDF_KNOWN_HARD_SKILLS = ["HTML", "CSS", "JavaScript", "TypeScript", "Python", "Java", "SQL", "React.js", "Next.js", "Node.js", "Express.js", "REST APIs", "JWT Authentication", "MongoDB", "MySQL", "PostgreSQL", "Git", "GitHub", "VS Code", "Selenium", "ChromeDriver", "Power BI", "Tableau", "Excel", "Razorpay", "Stripe", "Gemini API", "n8n"];
 
-export function ResumeBuilder({ initialPremium = false, initialSignedIn = true }) {
+export function ResumeBuilder({ initialPremium = false }) {
+  const { isLoaded, isSignedIn: clerkSignedIn } = useAuth();
   const fileInputRef = useRef(null);
   const lastScoredText = useRef("");
   const [resume, setResume] = useState(sampleResume);
   const [premium, setPremium] = useState(initialPremium);
-  const [signedIn] = useState(initialSignedIn);
+  const signedIn = isLoaded ? clerkSignedIn : false;
   const [importLoading, setImportLoading] = useState(false);
   const [enhanceLoading, setEnhanceLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -52,11 +54,12 @@ export function ResumeBuilder({ initialPremium = false, initialSignedIn = true }
   const toastType = /success|optimized|created|uploaded|unlocked/i.test(message) ? "success" : "warning";
 
   useEffect(() => {
+    if (!signedIn) return;
     fetch("/api/payments/status")
       .then((res) => res.json())
       .then((status) => setPremium(Boolean(status.premium)))
       .catch(() => {});
-  }, []);
+  }, [signedIn]);
 
   useEffect(() => {
     if (!message || importLoading || enhanceLoading) return;

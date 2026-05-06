@@ -12,5 +12,5 @@ export const metadata = {
 export default async function CareerCockpitPage() {
   const userId = await getCurrentUserId();
 
-  return <ResumeBuilder initialPremium={userId ? isPremiumUser(userId) : false} initialSignedIn={Boolean(userId)} />;
+  return <ResumeBuilder initialPremium={userId ? isPremiumUser(userId) : false} />;
 }
