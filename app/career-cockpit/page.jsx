@@ -1,6 +1,7 @@
 import { ResumeBuilder } from "@/components/ResumeBuilder";
 import { isPremiumUser } from "@/lib/payment-store";
 import { getCurrentUserId } from "@/lib/auth";
+import { AuthRequiredPanel } from "@/components/AuthGate";
 
 export const dynamic = "force-dynamic";
 

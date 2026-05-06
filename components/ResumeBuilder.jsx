@@ -47,6 +47,7 @@ export function ResumeBuilder({ initialPremium = false }) {
   const [ats, setAts] = useState(pendingAts);
   const [atsLoading, setAtsLoading] = useState(true);
   const [atsError, setAtsError] = useState("");
+  const [authGateOpen, setAuthGateOpen] = useState(false);
 
   const cleanResume = useMemo(() => autoImproveResume(resume, targetRole), [resume, targetRole]);
   const atsScore = typeof ats.score === "number" ? `${ats.score}%` : "--";
@@ -190,13 +191,7 @@ export function ResumeBuilder({ initialPremium = false }) {
     const currentText = text;
 
     if (!signedIn) {
-      const nextResume = autoImproveResume(cleanResume, targetRole);
-      const nextAts = scoreResume(nextResume);
-      setResume(nextResume);
-      setTargetRole(nextResume.targetRole || targetRole);
-      setAts(nextAts);
-      lastScoredText.current = composeResumeText(nextResume);
-      setMessage(beforeScore !== null ? `Local ATS score refreshed from ${beforeScore}% to ${nextAts.score}%.` : `Local ATS score checked: ${nextAts.score}%.`);
+      setAuthGateOpen(true);
       return;
     }
 
@@ -243,15 +238,7 @@ export function ResumeBuilder({ initialPremium = false }) {
     const explicitTargetRole = String(uploadTargetRole || "").trim();
 
     if (!signedIn) {
-      const nextResume = localOptimizeResume(sourceText, explicitTargetRole);
-      setResume(nextResume);
-      setTargetRole(nextResume.targetRole || explicitTargetRole || "");
-      setAts(scoreResume(nextResume));
-      lastScoredText.current = composeResumeText(nextResume);
-      setImportStatus("Local ATS optimizer converted your resume.");
-      setImportOpen(false);
-      setMessage("Resume Builder opened without login. Local ATS optimizer converted your resume.");
-      window.setTimeout(() => document.querySelector(".old-builder-grid")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      setAuthGateOpen(true);
       return;
     }
 
@@ -578,8 +565,9 @@ export function ResumeBuilder({ initialPremium = false }) {
           onConvert={() => optimizeFromText()}
         />
       ) : null}
-      {upgradeOpen ? <UpgradeModal onClose={() => setUpgradeOpen(false)} onBuyNow={() => { setUpgradeOpen(false); document.getElementById("premium")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} /> : null}
-      {message ? <Toast type={toastType} message={message} onClose={() => setMessage("")} /> : null}
+      {upgradeOpen && <UpgradeModal onClose={() => setUpgradeOpen(false)} onBuyNow={() => (window.location.href = "/pricing")} />}
+      {authGateOpen && <LoginPromptModal onClose={() => setAuthGateOpen(false)} />}
+      {message && <Toast type={toastType} message={message} onClose={() => setMessage("")} />}
       <input ref={fileInputRef} className="sr-only" type="file" accept=".txt,.md,.csv,.pdf,text/plain,text/markdown,text/csv,application/pdf" onChange={(e) => handleFile(e.target.files?.[0])} />
     </main>
   );
@@ -802,6 +790,22 @@ function Entry({ item, company = false }) {
 
 function EducationEntry({ item }) {
   return <div className="resume-row education-row"><strong>{[item.school, item.dates ? `(${item.dates})` : ""].filter(Boolean).join(" ")}</strong><strong>{item.degree}</strong></div>;
+}
+
+function LoginPromptModal({ onClose }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="popup-card">
+        <span className="plan-pill">Login Required</span>
+        <h2>AI features locked</h2>
+        <p>Please login or sign up to use Gemini AI for resume conversion and ATS optimization.</p>
+        <div className="popup-actions">
+          <Link href="/sign-up" className="primary-btn">Sign Up</Link>
+          <button className="ghost-btn" type="button" onClick={onClose}>Maybe Later</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function UpgradeModal({ onClose, onBuyNow }) {
@@ -1087,7 +1091,7 @@ function createResumePdf(resume) {
     }
   }
 
-  const output = render(Math.max(0.62, Math.min(1.45, best * 0.995)), true);
+  const output = render(Math.max(0.45, Math.min(1.45, best * 0.995)), true);
   return buildPdfBytes([output.stream], page);
 }
 
@@ -1095,14 +1099,14 @@ function preparePdfResume(resume) {
   const prepared = hardenPdfResume(normalizeResume(resume));
   return {
     ...prepared,
-    targetRole: compactPdfText(prepared.targetRole, 10),
-    summary: compactPdfText(ensurePdfSummaryRole(prepared.summary, prepared.targetRole, prepared.skills), 46),
-    experience: compactPdfItems(prepared.experience, 2, 4),
-    projects: compactPdfItems(prepared.projects, 3, 2),
+    targetRole: compactPdfText(prepared.targetRole, 20),
+    summary: compactPdfText(ensurePdfSummaryRole(prepared.summary, prepared.targetRole, prepared.skills), 150),
+    experience: compactPdfItems(prepared.experience, 8, 10),
+    projects: compactPdfItems(prepared.projects, 8, 8),
     skills: compactPdfSkills(prepared.skills, prepared),
-    achievements: compactPdfBullets(prepared.achievements, 3),
-    certifications: uniquePdfCertifications(prepared.certifications).slice(0, 3),
-    education: (prepared.education || []).filter((item) => item.school || item.degree).slice(0, 2),
+    achievements: compactPdfBullets(prepared.achievements, 10),
+    certifications: uniquePdfCertifications(prepared.certifications).slice(0, 10),
+    education: (prepared.education || []).filter((item) => item.school || item.degree).slice(0, 5),
   };
 }
 
@@ -1136,10 +1140,10 @@ function compactPdfItems(items, itemLimit, bulletLimit) {
     .slice(0, itemLimit)
     .map((item, index) => ({
       ...item,
-      title: compactPdfText(item.title, 12),
-      company: compactPdfText(item.company, 12),
-      subtitle: compactPdfText(item.subtitle, 12),
-      bullets: compactPdfBullets(item.bullets, index === 0 ? bulletLimit : Math.max(2, bulletLimit - 1)),
+      title: compactPdfText(item.title, 15),
+      company: compactPdfText(item.company, 15),
+      subtitle: compactPdfText(item.subtitle, 15),
+      bullets: compactPdfBullets(item.bullets, bulletLimit),
     }));
 }
 
@@ -1156,7 +1160,7 @@ function compactPdfSkills(value, resume = {}) {
   const hardSkills = [];
   const extraLines = [];
   rawLines.forEach((line) => {
-    const cleaned = compactPdfText(hardenPdfText(line), 18);
+    const cleaned = compactPdfText(hardenPdfText(line), 25);
     if (!cleaned) return;
     if (/^soft skills\s*:/i.test(cleaned)) return;
     if (/^(languages|frontend|backend|database|tools|domain skills|hard skills)\s*:/i.test(cleaned)) {
@@ -1167,17 +1171,17 @@ function compactPdfSkills(value, resume = {}) {
   });
   const inferredHard = inferPdfHardSkills(resume);
   const hardLine = uniquePdfSkillItems([...hardSkills, ...extraLines, inferredHard].join(", "))
-    .slice(0, 18)
+    .slice(0, 30)
     .join(", ");
   const lines = [
     hardLine ? `Hard Skills: ${hardLine}` : "",
     PDF_SOFT_SKILLS,
     ...rawLines
-      .map((line) => compactPdfText(hardenPdfText(line), 18))
+      .map((line) => compactPdfText(hardenPdfText(line), 25))
       .filter((line) => /^(languages|frontend|backend|database|tools|domain skills)\s*:/i.test(line))
-      .slice(0, 3),
+      .slice(0, 6),
   ].filter(Boolean);
-  return uniquePdfLines(lines).slice(0, 6).join("\n");
+  return uniquePdfLines(lines).slice(0, 10).join("\n");
 }
 
 function hardenPdfBulletBlock(value, usedStarts, acceptedBullets) {
