@@ -13,6 +13,7 @@
     "@clerk/nextjs": "^6.35.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "jspdf": "^4.2.1",
     "next": "^15.5.6",
     "openai": "^4.104.0",
     "razorpay": "^2.9.6",

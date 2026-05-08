@@ -20,10 +20,6 @@ const pendingAts = {
   breakdown: [],
 };
 
-const PDF_BULLET = "__PDF_BULLET__";
-const PDF_ACTION_VERBS = ["Developed", "Implemented", "Optimized", "Integrated", "Delivered", "Engineered", "Configured", "Enhanced", "Automated", "Designed", "Built", "Improved", "Managed", "Supported"];
-const PDF_SOFT_SKILLS = "Soft Skills: Communication, Problem Solving, Teamwork, Time Management";
-const PDF_KNOWN_HARD_SKILLS = ["HTML", "CSS", "JavaScript", "TypeScript", "Python", "Java", "SQL", "React.js", "Next.js", "Node.js", "Express.js", "REST APIs", "JWT Authentication", "MongoDB", "MySQL", "PostgreSQL", "Git", "GitHub", "VS Code", "Selenium", "ChromeDriver", "Power BI", "Tableau", "Excel", "Razorpay", "Stripe", "Gemini API", "n8n"];
 
 export function ResumeBuilder({ initialPremium = false }) {
   const { isLoaded, isSignedIn: clerkSignedIn } = useAuth();
@@ -409,7 +405,7 @@ export function ResumeBuilder({ initialPremium = false }) {
   }
 
   function downloadTxt() {
-    requirePremium(() => downloadBlob(composeResumeText(cleanResume), "txt", "text/plain;charset=utf-8"));
+    downloadBlob(composeResumeText(cleanResume), "txt", "text/plain;charset=utf-8");
   }
 
   function downloadDoc() {
@@ -417,9 +413,252 @@ export function ResumeBuilder({ initialPremium = false }) {
     downloadBlob(html, "doc", "application/msword;charset=utf-8");
   }
 
-  function downloadPdf() {
-    downloadBlob(createResumePdf(cleanResume), "pdf", "application/pdf");
-    setMessage("PDF downloaded successfully.");
+  async function downloadPdf() {
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const margin = 36;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const contentWidth = pageWidth - margin * 2;
+      let y = 45;
+
+      const SIZES = {
+        NAME: 24,
+        CONTACT: 9,
+        SECTION: 12.2,
+        ENTRY_TITLE: 10.8,
+        TEXT: 9.4,
+        LINE_HEIGHT: 1.24,
+      };
+
+      const setFont = (style = "normal", size = SIZES.TEXT, color = "#111111") => {
+        doc.setFont("times", style);
+        doc.setFontSize(size);
+        doc.setTextColor(color);
+      };
+
+      const addText = (text, size = SIZES.TEXT, style = "normal", align = "left", color = "#111111") => {
+        if (!String(text || "").trim()) return;
+        setFont(style, size, color);
+        const lines = doc.splitTextToSize(String(text || ""), contentWidth);
+        if (align === "center") {
+          doc.text(lines, pageWidth / 2, y, { align: "center" });
+        } else if (align === "right") {
+          doc.text(lines, pageWidth - margin, y, { align: "right" });
+        } else {
+          doc.text(lines, margin, y);
+        }
+        y += lines.length * size * SIZES.LINE_HEIGHT + size * 0.16;
+      };
+
+      const addRow = (left, right = "", options = {}) => {
+        const leftText = String(left || "").trim();
+        const rightText = String(right || "").trim();
+        if (!leftText && !rightText) return;
+        const size = options.size || SIZES.ENTRY_TITLE;
+        const leftStyle = options.leftStyle || "bold";
+        const rightStyle = options.rightStyle || "normal";
+        setFont(rightStyle, size);
+        const rightWidth = rightText ? doc.getTextWidth(rightText) : 0;
+        const leftMaxWidth = rightText ? contentWidth - rightWidth - 18 : contentWidth;
+        const lines = doc.splitTextToSize(leftText || " ", Math.max(190, leftMaxWidth));
+        lines.forEach((line, index) => {
+          setFont(leftStyle, size);
+          doc.text(line, margin, y);
+          if (index === 0 && rightText) {
+            setFont(rightStyle, Math.max(8.8, size - 0.2), "#222222");
+            doc.text(rightText, pageWidth - margin, y, { align: "right" });
+          }
+          y += size * (options.lineHeight || 1.15);
+        });
+        y += options.after || 0;
+      };
+
+      const addSection = (title) => {
+        y += 15;
+        setFont("bold", SIZES.SECTION);
+        doc.text(title.toUpperCase(), margin, y);
+        y += 3.8;
+        doc.setDrawColor(34, 34, 34);
+        doc.setLineWidth(0.35);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 14;
+      };
+
+      const drawContactIcon = (type, x, baselineY, iconSize = 8.2) => {
+        const top = baselineY - iconSize + 1.1;
+        const unit = iconSize / 24;
+        const px = (value) => x + value * unit;
+        const py = (value) => top + value * unit;
+        doc.setDrawColor(17, 17, 17);
+        doc.setLineWidth(0.8);
+
+        if (type === "phone") {
+          doc.line(px(7), py(5), px(10), py(8));
+          doc.line(px(10), py(8), px(8.4), py(10.2));
+          doc.line(px(8.4), py(10.2), px(13.8), py(15.6));
+          doc.line(px(13.8), py(15.6), px(16), py(14));
+          doc.line(px(16), py(14), px(19), py(17));
+          doc.line(px(19), py(17), px(17.2), py(20));
+          doc.line(px(17.2), py(20), px(14.2), py(19));
+          doc.line(px(14.2), py(19), px(5), py(9.8));
+          doc.line(px(5), py(9.8), px(4), py(6.8));
+          doc.line(px(4), py(6.8), px(7), py(5));
+          return;
+        }
+
+        if (type === "email") {
+          doc.rect(px(3.8), py(6.2), 16.4 * unit, 11.6 * unit);
+          doc.line(px(4.7), py(7.2), px(12), py(12.4));
+          doc.line(px(19.3), py(7.2), px(12), py(12.4));
+          doc.line(px(4.8), py(16.8), px(10), py(12.7));
+          doc.line(px(19.2), py(16.8), px(14), py(12.7));
+          return;
+        }
+
+        if (type === "location") {
+          doc.circle(px(12), py(9.4), 2.1 * unit);
+          doc.line(px(12), py(21), px(7.4), py(13.6));
+          doc.line(px(12), py(21), px(16.6), py(13.6));
+          doc.line(px(7.4), py(13.6), px(6.1), py(9.6));
+          doc.line(px(16.6), py(13.6), px(17.9), py(9.6));
+          return;
+        }
+
+        if (type === "linkedin") {
+          doc.rect(px(4), py(4), 16 * unit, 16 * unit);
+          doc.line(px(8), py(10), px(8), py(17));
+          doc.line(px(11.2), py(10), px(11.2), py(17));
+          doc.line(px(11.2), py(12), px(14.2), py(10));
+          doc.line(px(14.2), py(10), px(16.6), py(12.4));
+          doc.line(px(16.6), py(12.4), px(16.6), py(17));
+          return;
+        }
+
+        doc.circle(px(12), py(12), 7.2 * unit);
+        doc.line(px(8), py(12), px(16), py(12));
+        doc.line(px(12), py(8), px(12), py(16));
+      };
+
+      const addContactRow = () => {
+        const iconSize = 8.2;
+        const iconGap = 3.8;
+        const itemGap = 12;
+        setFont("normal", SIZES.CONTACT, "#333333");
+        const entries = contactItems(cleanResume)
+          .map((item) => ({ ...item, value: String(item.value || "").trim() }))
+          .filter((item) => item.value)
+          .map((item) => ({
+            ...item,
+            width: iconSize + iconGap + doc.getTextWidth(item.value),
+          }));
+        if (!entries.length) return;
+
+        const rows = [];
+        let current = [];
+        let currentWidth = 0;
+        entries.forEach((entry) => {
+          const nextWidth = currentWidth + (current.length ? itemGap : 0) + entry.width;
+          if (current.length && nextWidth > contentWidth) {
+            rows.push({ items: current, width: currentWidth });
+            current = [entry];
+            currentWidth = entry.width;
+          } else {
+            current.push(entry);
+            currentWidth = nextWidth;
+          }
+        });
+        if (current.length) rows.push({ items: current, width: currentWidth });
+
+        rows.slice(0, 2).forEach((row) => {
+          let x = margin + Math.max(0, (contentWidth - row.width) / 2);
+          row.items.forEach((item, index) => {
+            if (index > 0) x += itemGap;
+            drawContactIcon(item.key, x, y, iconSize);
+            setFont("normal", SIZES.CONTACT, "#333333");
+            doc.text(item.value, x + iconSize + iconGap, y);
+            x += item.width;
+          });
+          y += SIZES.CONTACT * 1.35;
+        });
+      };
+
+      const addBullets = (value) => {
+        String(value || "").split("\n").filter(Boolean).forEach((bullet) => {
+          const bLines = doc.splitTextToSize("\u2022 " + bullet.trim(), contentWidth - 12);
+          setFont("normal", SIZES.TEXT);
+          doc.text(bLines, margin + 9, y);
+          y += bLines.length * SIZES.TEXT * SIZES.LINE_HEIGHT;
+        });
+      };
+
+      addText(cleanResume.name || "Your Name", SIZES.NAME, "bold", "center");
+      y -= 4;
+      addContactRow();
+      y += 6;
+
+      if (cleanResume.summary) {
+        addSection("Summary");
+        addText(cleanResume.summary);
+      }
+
+      if (cleanResume.experience?.length) {
+        addSection("Experience");
+        cleanResume.experience.forEach((exp) => {
+          if (!exp.title && !exp.company) return;
+          addRow(exp.title || "Role", exp.dates, { after: 0.5 });
+          addText(exp.company || "", SIZES.TEXT, "bold");
+          addBullets(exp.bullets);
+          y += 4;
+        });
+      }
+
+      if (cleanResume.projects?.length) {
+        addSection("Projects");
+        cleanResume.projects.forEach((proj) => {
+          if (!proj.title) return;
+          addRow(proj.title || "Project", proj.dates, { after: 0.5 });
+          addText(proj.subtitle || "");
+          addBullets(proj.bullets);
+          y += 4;
+        });
+      }
+
+      if (cleanResume.skills) {
+        addSection("Skills");
+        addText(cleanResume.skills);
+      }
+
+      const certs = [
+        ...(cleanResume.achievements ? cleanResume.achievements.split("\n") : []),
+        ...(cleanResume.certifications || []).map((cert) => [cert.title, cert.issuer, cert.dates].filter(Boolean).join(", ")),
+      ].filter(Boolean);
+
+      if (certs.length) {
+        addSection("Certifications");
+        certs.forEach((cert) => {
+          const lines = doc.splitTextToSize("\u2022 " + cert, contentWidth - 12);
+          setFont("normal", SIZES.TEXT);
+          doc.text(lines, margin + 9, y);
+          y += lines.length * SIZES.TEXT * SIZES.LINE_HEIGHT;
+        });
+      }
+
+      if (cleanResume.education?.length) {
+        addSection("Education");
+        cleanResume.education.forEach((edu) => {
+          const schoolText = [edu.school, edu.dates ? "(" + edu.dates + ")" : ""].filter(Boolean).join(" ");
+          addRow(schoolText, edu.degree || "", { lineHeight: 1.18, rightStyle: "normal" });
+          y += 2;
+        });
+      }
+
+      doc.save(slug(cleanResume.name || "resume") + ".pdf");
+      setMessage("Resume PDF downloaded successfully.");
+    } catch (err) {
+      console.error(err);
+      setMessage("PDF generation failed. Please try again.");
+    }
   }
 
   function downloadBlob(content, extension, type) {
@@ -512,7 +751,7 @@ export function ResumeBuilder({ initialPremium = false }) {
               <strong>ATS Resume Preview</strong>
               <div className="actions preview-actions">
                 <button className="primary-btn small" type="button" onClick={enhanceResumeContent} disabled={enhanceLoading}>{enhanceLoading ? "Scanning..." : "Enhance ATS"}</button>
-                <button className="ghost-btn small" type="button" onClick={downloadTxt}>{premium ? "Download TXT" : "TXT Locked"}</button>
+                <button className="ghost-btn small" type="button" onClick={downloadTxt}>Download TXT</button>
                 <button className="ghost-btn small" type="button" onClick={downloadDoc}>Download DOC</button>
                 <button className="primary-btn small" type="button" onClick={downloadPdf}>Download PDF</button>
               </div>
@@ -534,14 +773,6 @@ export function ResumeBuilder({ initialPremium = false }) {
                 ))}
               </div>
               {(ats.notes || []).slice(0, 12).map((note) => <p className="notice" key={note}>Fix: {note}</p>)}
-            </div>
-            <div id="premium" className="premium-box">
-              <div className="premium-copy">
-                <span className="plan-pill">{premium ? "Premium active" : "Premium locked"}</span>
-                <h3>Download Unlock</h3>
-                <p className={premium ? "success" : "notice"}>{premium ? "Downloads are unlocked." : "Pay once to unlock PDF, DOC, and TXT downloads."}</p>
-              </div>
-              {!premium ? <PaymentButtons onPaid={() => { setPremium(true); setMessage("Premium unlocked successfully."); }} /> : null}
             </div>
           </aside>
         </section>
@@ -846,716 +1077,6 @@ function documentLikeResume(resume) {
   `;
 }
 
-function printStyles() {
-  return "body{margin:0;background:#fff}.paper{padding:42px;color:#111;font-family:Georgia,'Times New Roman',serif;line-height:1.45;width:100%;box-sizing:border-box;overflow:hidden}.paper p,.paper li{text-align:justify;margin-top:0;margin-bottom:8px;font-size:13px}.paper h1{text-align:center;margin:0;font-size:24px}.contact{display:flex;align-items:center;justify-content:center;gap:8px 12px;flex-wrap:wrap;text-align:center;font-size:12px;margin:10px 0 20px}.contact-item{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}.contact-icon{width:12px;height:12px;display:inline-block;fill:none;stroke:#111;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}.contact a{color:#111;text-decoration:none}.paper h2{font-size:20px;text-transform:uppercase;border-bottom:1px solid #222;margin-top:22px;margin-bottom:12px;padding-bottom:4px;font-weight:700;letter-spacing:0.3px}.resume-row{display:flex;justify-content:space-between;gap:18px;font-weight:700}.education-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}ul{margin-top:6px;margin-bottom:8px;padding-left:18px}";
-}
-
-function createResumePdf(resume) {
-  const exportResume = preparePdfResume(resume);
-  const page = { width: 595.28, height: 841.89, marginX: 42, marginTop: 42, marginBottom: 42 };
-  page.contentWidth = page.width - page.marginX * 2;
-  const render = (scale, draw = false) => {
-    const commands = draw ? ["q", "0 G", `${fmt(0.8 * scale)} w`] : [];
-    const links = [];
-    const size = (value) => value * scale;
-    let y = page.height - page.marginTop;
-
-    const drawLine = (x1, y1, x2, y2) => {
-      if (draw) commands.push(`${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} l S`);
-    };
-    const drawCurve = (x1, y1, x2, y2, x3, y3, x4, y4) => {
-      if (draw) commands.push(`${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} ${fmt(x3)} ${fmt(y3)} ${fmt(x4)} ${fmt(y4)} c S`);
-    };
-    const drawRect = (x, rectY, width, height) => {
-      if (draw) commands.push(`${fmt(x)} ${fmt(rectY)} ${fmt(width)} ${fmt(height)} re S`);
-    };
-    const drawCircle = (cx, cy, radius, fill = false) => {
-      if (!draw) return;
-      const k = radius * 0.5522847498;
-      commands.push([
-        `${fmt(cx + radius)} ${fmt(cy)} m`,
-        `${fmt(cx + radius)} ${fmt(cy + k)} ${fmt(cx + k)} ${fmt(cy + radius)} ${fmt(cx)} ${fmt(cy + radius)} c`,
-        `${fmt(cx - k)} ${fmt(cy + radius)} ${fmt(cx - radius)} ${fmt(cy + k)} ${fmt(cx - radius)} ${fmt(cy)} c`,
-        `${fmt(cx - radius)} ${fmt(cy - k)} ${fmt(cx - k)} ${fmt(cy - radius)} ${fmt(cx)} ${fmt(cy - radius)} c`,
-        `${fmt(cx + k)} ${fmt(cy - radius)} ${fmt(cx + radius)} ${fmt(cy - k)} ${fmt(cx + radius)} ${fmt(cy)} c`,
-        fill ? "f" : "S",
-      ].join(" "));
-    };
-    const drawContactIcon = (type, x, baseline, iconSize) => {
-      const s = iconSize;
-      const y0 = baseline - s * 0.18;
-      const ix = (value) => x + (value / 24) * s;
-      const iy = (value) => y0 + ((24 - value) / 24) * s;
-      const line = (x1, y1, x2, y2) => drawLine(ix(x1), iy(y1), ix(x2), iy(y2));
-      const curve = (x1, y1, x2, y2, x3, y3, x4, y4) => drawCurve(ix(x1), iy(y1), ix(x2), iy(y2), ix(x3), iy(y3), ix(x4), iy(y4));
-      const rect = (rectX, rectY, width, height) => drawRect(ix(rectX), iy(rectY + height), (width / 24) * s, (height / 24) * s);
-      const circle = (cx, cy, radius, fill = false) => drawCircle(ix(cx), iy(cy), (radius / 24) * s, fill);
-      if (draw) commands.push(`q 1 J 1 j ${fmt(Math.max(0.9, 1.05 * scale))} w`);
-      if (type === "phone") {
-        curve(7, 4.5, 5.2, 7.2, 8.2, 14.8, 15.8, 19.5);
-        line(7, 4.5, 5, 6.7);
-        line(5, 6.7, 7.3, 10.2);
-        line(15.8, 19.5, 19, 17.2);
-        line(19, 17.2, 15.7, 14.2);
-        if (draw) commands.push("Q");
-        return;
-      }
-      if (type === "email") {
-        rect(3, 6, 18, 12);
-        line(4, 7, 12, 13.2);
-        line(20, 7, 12, 13.2);
-        line(4, 18, 10.2, 12);
-        line(20, 18, 13.8, 12);
-        if (draw) commands.push("Q");
-        return;
-      }
-      if (type === "location") {
-        circle(12, 9.5, 4.2);
-        circle(12, 9.5, 1.3, true);
-        line(12, 21, 8.6, 13.8);
-        line(12, 21, 15.4, 13.8);
-        if (draw) commands.push("Q");
-        return;
-      }
-      if (type === "linkedin") {
-        rect(3.5, 3.5, 17, 17);
-        if (draw) commands.push("Q");
-        drawText("in", x + s * 0.22, y0 + s * 0.24, { bold: true, size: 5.8 });
-        return;
-      }
-      if (type === "github") {
-        circle(12, 11, 6.2);
-        line(7.5, 7.4, 8.4, 3.8);
-        line(8.4, 3.8, 11, 6.3);
-        line(13, 6.3, 15.6, 3.8);
-        line(15.6, 3.8, 16.5, 7.4);
-        line(10, 17, 10, 20);
-        line(14, 17, 14, 20);
-        if (draw) commands.push("Q");
-        return;
-      }
-      line(7, 4.5, 5, 6.7);
-      curve(7, 4.5, 5.2, 7.2, 8.2, 14.8, 15.8, 19.5);
-      line(15.8, 19.5, 19, 17.2);
-      if (draw) commands.push("Q");
-    };
-    const drawText = (text, x, textY, options = {}) => {
-      if (!draw) return;
-      const fontSize = size(options.size || 10);
-      const font = options.bold ? "F2" : "F1";
-      let drawX = x;
-      const textWidth = estimateTextWidth(text, fontSize, options.bold);
-      if (options.align === "center") drawX = x - textWidth / 2;
-      if (options.align === "right") drawX = x - textWidth;
-      
-      if (options.url) {
-        links.push({
-          url: options.url,
-          rect: [drawX, textY - 2, drawX + textWidth, textY + fontSize - 2]
-        });
-      }
-
-      const wordSpacing = options.wordSpacing ? `${fmt(options.wordSpacing)} Tw ` : "";
-      commands.push(`BT /${font} ${fmt(fontSize)} Tf 1 0 0 1 ${fmt(drawX)} ${fmt(textY)} Tm ${wordSpacing}(${escapePdfText(text)}) Tj 0 Tw ET`);
-    };
-    const addWrappedText = (text, options = {}) => {
-      const sourceLines = String(text || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
-      const fontSize = size(options.size || 9.8); // 9.8pt ≈ 13px
-      const lineHeight = size(options.lineHeight || (options.size || 9.8) * 1.45);
-      const indent = size(options.indent || 0);
-      const maxWidth = page.contentWidth - indent;
-      sourceLines.forEach((sourceLine) => {
-        const wrapped = wrapPdfLine(sourceLine, maxWidth, fontSize, options.bold);
-        wrapped.forEach((line, index) => {
-          let wordSpacing = 0;
-          if (options.justify && index < wrapped.length - 1) {
-            const words = line.split(/\s+/);
-            if (words.length > 1) {
-              const textWidth = estimateTextWidth(line, fontSize, options.bold);
-              wordSpacing = (maxWidth - textWidth) / (words.length - 1);
-              // Safety: don't stretch too much if estimation was way off
-              wordSpacing = Math.max(0, Math.min(size(12), wordSpacing));
-            }
-          }
-          drawText(line, page.marginX + indent, y, { ...options, wordSpacing });
-          y -= lineHeight;
-        });
-        y -= size(options.after || 0);
-      });
-    };
-    const addSection = (title) => {
-      y -= size(22); // margin-top: 22px
-      drawText(title.toUpperCase(), page.marginX, y, { bold: true, size: 15 }); // 15pt ≈ 20px
-      y -= size(12);
-      drawLine(page.marginX, y, page.width - page.marginX, y);
-      y -= size(12);
-    };
-    const addPair = (left, right = "") => {
-      const cleanLeft = pdfText(left);
-      const cleanRight = pdfText(right);
-      if (!cleanLeft && !cleanRight) return;
-      const pairSize = size(9.7);
-      const rightWidth = cleanRight ? estimateTextWidth(cleanRight, pairSize, true) : 0;
-      // Conservative check to prevent overlap: if there's a date on the right, reserve space for it
-      const rightFits = cleanRight && rightWidth < page.contentWidth * 0.45;
-      const leftWidth = rightFits ? page.contentWidth - rightWidth - size(28) : page.contentWidth;
-      
-      wrapPdfLine(cleanLeft, leftWidth, pairSize, true).forEach((line, index) => {
-        drawText(line, page.marginX, y, { bold: true, size: 9.7 });
-        if (index === 0 && rightFits) {
-          drawText(cleanRight, page.width - page.marginX, y, { bold: true, size: 9.7, align: "right" });
-        }
-        y -= size(12.5);
-      });
-      if (cleanRight && !rightFits) addWrappedText(cleanRight, { size: 9.1, lineHeight: 11.2, after: 0.5 });
-    };
-    const addBullets = (value, options = {}) => {
-      splitPdfLines(value).forEach((line) => {
-        const fontSize = size(options.size || 9.8);
-        const lineHeight = size(options.lineHeight || fontSize * 1.45);
-        const bulletX = page.marginX + size(options.bulletIndent || 7);
-        const textX = page.marginX + size(options.textIndent || 18);
-        const indent = size(options.textIndent || 18);
-        const maxWidth = page.contentWidth - indent;
-        const wrapped = wrapPdfLine(line, maxWidth, fontSize, options.bold);
-        wrapped.forEach((wrappedLine, index) => {
-          let wordSpacing = 0;
-          if (index < wrapped.length - 1) {
-            const words = wrappedLine.split(/\s+/);
-            if (words.length > 1) {
-              const textWidth = estimateTextWidth(wrappedLine, fontSize, options.bold);
-              wordSpacing = (maxWidth - textWidth) / (words.length - 1);
-            }
-          }
-          if (index === 0) {
-            y -= size(4);
-            drawText(PDF_BULLET, bulletX, y, { size: options.size || 9.8 });
-          }
-          drawText(wrappedLine, textX, y, { ...options, wordSpacing });
-          y -= lineHeight;
-        });
-        y -= size(options.after || 4);
-      });
-    };
-    const addContactRows = () => {
-      const items = contactPdfItems(exportResume);
-      if (!items.length) return;
-      const fontSize = size(8.8);
-      const iconSize = size(8.4);
-      const iconGap = size(3.8);
-      const itemGap = size(12);
-      const rows = [[]];
-      items.forEach((item) => {
-        const width = iconSize + iconGap + estimateTextWidth(item.value, fontSize, false);
-        const current = rows[rows.length - 1];
-        const currentWidth = current.reduce((sum, entry) => sum + entry.width, 0) + Math.max(0, current.length - 1) * itemGap;
-        if (current.length && currentWidth + itemGap + width > page.contentWidth && rows.length < 2) {
-          rows.push([{ ...item, width }]);
-        } else {
-          current.push({ ...item, width });
-        }
-      });
-      rows.forEach((row) => {
-        if (!row.length) return;
-        const rowWidth = row.reduce((sum, item) => sum + item.width, 0) + Math.max(0, row.length - 1) * itemGap;
-        let x = page.marginX + Math.max(0, (page.contentWidth - rowWidth) / 2);
-        row.forEach((item) => {
-          drawContactIcon(item.key, x, y, iconSize);
-          drawText(item.value, x + iconSize + iconGap, y, { size: 8.8, url: item.url });
-          x += item.width + itemGap;
-        });
-        y -= size(11.6);
-      });
-    };
-
-    drawText(pdfText(exportResume.name || "Your Name"), page.width / 2, y, { bold: true, size: 21, align: "center" });
-    y -= size(15);
-
-    if (exportResume.targetRole) {
-      drawText(pdfText(exportResume.targetRole), page.width / 2, y, { bold: true, size: 9.2, align: "center" });
-      y -= size(11);
-    }
-    addContactRows();
-    y -= size(4);
-
-    addSection("Summary");
-    addWrappedText(exportResume.summary, { size: 9.8, lineHeight: 9.8 * 1.45, after: 1.4, justify: true });
-
-    addSection("Experience");
-    (exportResume.experience || []).forEach((item) => {
-      y -= size(6); // margin-top
-      addPair(item.title || "Role", item.dates);
-      addWrappedText(item.company, { bold: true, size: 9.1, lineHeight: 11.2, after: 0.7 });
-      addBullets(item.bullets);
-    });
-
-    addSection("Projects");
-    (exportResume.projects || []).forEach((item) => {
-      addPair(item.title || "Project", item.dates);
-      addWrappedText(item.subtitle, { size: 9, lineHeight: 11.1, after: 0.7 });
-      addBullets(item.bullets);
-      y -= size(2);
-    });
-
-    addSection("Skills");
-    addBullets(exportResume.skills);
-
-    addSection("Licences and Certifications");
-    addBullets(exportResume.achievements);
-    (exportResume.certifications || []).forEach((item) => {
-      const text = [item.title, item.issuer, item.dates].filter(Boolean).join(", ");
-      addBullets(text, { bold: true });
-    });
-
-    addSection("Education");
-    (exportResume.education || []).forEach((item) => {
-      const schoolText = [item.school, item.dates ? `(${item.dates})` : ""].filter(Boolean).join(" ");
-      addPair(schoolText, item.degree || "");
-      y -= size(6); // Space between education items
-    });
-
-    if (draw) commands.push("Q");
-    return { bottomY: y, stream: commands.join("\n"), links };
-  };
-
-  let low = 0.62;
-  let high = 1.45;
-  let best = low;
-  for (let index = 0; index < 18; index += 1) {
-    const mid = (low + high) / 2;
-    if (render(mid).bottomY >= page.marginBottom) {
-      best = mid;
-      low = mid;
-    } else {
-      high = mid;
-    }
-  }
-
-  const output = render(Math.max(0.45, Math.min(1.45, best * 0.995)), true);
-  return buildPdfBytes([output.stream], page, [output.links]);
-}
-
-function preparePdfResume(resume) {
-  const prepared = hardenPdfResume(normalizeResume(resume));
-  return {
-    ...prepared,
-    targetRole: compactPdfText(prepared.targetRole, 20),
-    summary: compactPdfText(ensurePdfSummaryRole(prepared.summary, prepared.targetRole, prepared.skills), 150),
-    experience: compactPdfItems(prepared.experience, 8, 10),
-    projects: compactPdfItems(prepared.projects, 8, 8),
-    skills: compactPdfSkills(prepared.skills, prepared),
-    achievements: compactPdfBullets(prepared.achievements, 10),
-    certifications: uniquePdfCertifications(prepared.certifications).slice(0, 10),
-    education: (prepared.education || []).filter((item) => item.school || item.degree).slice(0, 5),
-  };
-}
-
-function hardenPdfResume(resume) {
-  const usedStarts = new Set();
-  const acceptedBullets = [];
-  const targetRole = compactPdfText(resume.targetRole || inferPdfTargetRole(resume), 10);
-  return {
-    ...resume,
-    targetRole,
-    summary: hardenPdfText(resume.summary),
-    achievements: compactPdfBullets(resume.achievements, 4),
-    experience: hardenPdfItems(resume.experience, usedStarts, acceptedBullets),
-    projects: hardenPdfItems(resume.projects, usedStarts, acceptedBullets),
-  };
-}
-
-function hardenPdfItems(items = [], usedStarts, acceptedBullets) {
-  return (items || []).map((item) => ({
-    ...item,
-    title: hardenPdfText(item.title),
-    company: hardenPdfText(item.company),
-    subtitle: hardenPdfText(item.subtitle),
-    bullets: hardenPdfBulletBlock(item.bullets, usedStarts, acceptedBullets),
-  }));
-}
-
-function compactPdfItems(items, itemLimit, bulletLimit) {
-  return (items || [])
-    .filter((item) => item.title || item.company || item.subtitle || item.bullets)
-    .slice(0, itemLimit)
-    .map((item, index) => ({
-      ...item,
-      title: compactPdfText(item.title, 15),
-      company: compactPdfText(item.company, 15),
-      subtitle: compactPdfText(item.subtitle, 15),
-      bullets: compactPdfBullets(item.bullets, bulletLimit),
-    }));
-}
-
-function compactPdfBullets(value, limit = 4) {
-  return splitPdfLines(value)
-    .map((line) => compactPdfText(hardenPdfText(line), 24))
-    .filter(Boolean)
-    .slice(0, limit)
-    .join("\n");
-}
-
-function compactPdfSkills(value, resume = {}) {
-  const rawLines = splitPdfLines(value);
-  const hardSkills = [];
-  const extraLines = [];
-  rawLines.forEach((line) => {
-    const cleaned = compactPdfText(hardenPdfText(line), 25);
-    if (!cleaned) return;
-    if (/^soft skills\s*:/i.test(cleaned)) return;
-    if (/^(languages|frontend|backend|database|tools|domain skills|hard skills)\s*:/i.test(cleaned)) {
-      hardSkills.push(cleaned.replace(/^(hard skills|languages|frontend|backend|database|tools|domain skills)\s*:\s*/i, ""));
-    } else {
-      extraLines.push(cleaned);
-    }
-  });
-  const inferredHard = inferPdfHardSkills(resume);
-  const hardLine = uniquePdfSkillItems([...hardSkills, ...extraLines, inferredHard].join(", "))
-    .slice(0, 30)
-    .join(", ");
-  const lines = [
-    hardLine ? `Hard Skills: ${hardLine}` : "",
-    PDF_SOFT_SKILLS,
-    ...rawLines
-      .map((line) => compactPdfText(hardenPdfText(line), 25))
-      .filter((line) => /^(languages|frontend|backend|database|tools|domain skills)\s*:/i.test(line))
-      .slice(0, 6),
-  ].filter(Boolean);
-  return uniquePdfLines(lines).slice(0, 10).join("\n");
-}
-
-function hardenPdfBulletBlock(value, usedStarts, acceptedBullets) {
-  const local = [];
-  return splitPdfLines(value)
-    .map((line) => ensurePdfActionVerb(line, usedStarts))
-    .filter((line) => {
-      if (!line) return false;
-      if (local.some((item) => pdfSimilarity(item, line) >= 0.72)) return false;
-      if (acceptedBullets.some((item) => pdfSimilarity(item, line) >= 0.72)) return false;
-      local.push(line);
-      acceptedBullets.push(line);
-      return true;
-    })
-    .slice(0, 8)
-    .join("\n");
-}
-
-function ensurePdfActionVerb(value, usedStarts) {
-  const cleanLine = hardenPdfText(value).replace(/[.!?]+$/g, "");
-  if (!cleanLine) return "";
-  const match = cleanLine.match(/^([A-Z][a-z]+)\b(.*)$/);
-  const currentVerb = match?.[1] || "";
-  const hasAction = hasPdfActionVerb(cleanLine);
-  const shouldReplace = !hasAction || usedStarts.has(currentVerb.toLowerCase());
-  const verb = shouldReplace ? nextPdfActionVerb(usedStarts) : currentVerb;
-  usedStarts.add(verb.toLowerCase());
-  const body = shouldReplace && hasAction ? (match?.[2] || "").trim() : cleanLine;
-  const sentence = shouldReplace ? `${verb} ${lowerFirstPdf(body)}` : cleanLine;
-  return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
-}
-
-function nextPdfActionVerb(usedStarts) {
-  return PDF_ACTION_VERBS.find((verb) => !usedStarts.has(verb.toLowerCase())) || PDF_ACTION_VERBS[usedStarts.size % PDF_ACTION_VERBS.length];
-}
-
-function hasPdfActionVerb(value) {
-  return new RegExp(`^(${PDF_ACTION_VERBS.join("|")})\\b`, "i").test(String(value || "").trim());
-}
-
-function hardenPdfText(value) {
-  return pdfText(value)
-    .replace(/\s+/g, " ")
-    .replace(/([a-z0-9])\.([A-Z])/g, "$1. $2")
-    .replace(/([a-z0-9]),([A-Z])/g, "$1, $2")
-    .replace(/([a-z0-9]);([A-Z])/g, "$1; $2")
-    .replace(/\b(\w+)\s+\1\b/gi, "$1")
-    .replace(/\b(Developed|Built|Created|Implemented|Optimized|Improved|Integrated|Managed|Led|Delivered|Configured|Designed|Supported|Maintained|Prepared|Assisted|Coordinated|Performed|Engineered|Enhanced|Reduced|Increased|Launched|Analyzed|Automated)\s+and\s+(deploy|integrate|design|develop|optimize|enhance|configure|deliver|engineer|implement|build|create|manage|support|maintain|prepare|assist|coordinate|perform|reduce|increase|launch|analyze|automate)\b/gi, (_, first, second) => `${first} and ${pdfPastTense(second)}`)
-    .replace(/\bto\s+extracts\b/gi, "to extract")
-    .replace(/\bto\s+sends\b/gi, "to send")
-    .replace(/\bto\s+optimizes\b/gi, "to optimize")
-    .replace(/\bachieve\s+(\d+\+?)\s+ATS score\b/gi, "achieve an $1 ATS score")
-    .replace(/\breact\.?\s*js\b/gi, "React.js")
-    .replace(/\bnode\.?\s*js\b/gi, "Node.js")
-    .replace(/\bexpress\.?\s*js\b/gi, "Express.js")
-    .replace(/\bnext\.?\s*js\b/gi, "Next.js")
-    .replace(/\bjavascript\b/gi, "JavaScript")
-    .replace(/\btypescript\b/gi, "TypeScript")
-    .replace(/\bmongodb\b/gi, "MongoDB")
-    .replace(/\bgithub\b/gi, "GitHub")
-    .replace(/\bchrome\s*driver\b/gi, "ChromeDriver")
-    .replace(/\bchromedriver\b/gi, "ChromeDriver")
-    .replace(/\brestful api\b/gi, "REST API")
-    .replace(/\brest api\b/gi, "REST API")
-    .replace(/\brest apis\b/gi, "REST APIs")
-    .replace(/\bhtml\b/gi, "HTML")
-    .replace(/\bcss\b/gi, "CSS")
-    .replace(/\bsql\b/gi, "SQL")
-    .replace(/\bmern\b/gi, "MERN")
-    .replace(/\bapi\b/gi, "API")
-    .replace(/\bapis\b/gi, "APIs")
-    .replace(/\bexperiance\b/gi, "experience")
-    .replace(/\bexprience\b/gi, "experience")
-    .replace(/\bdevelopement\b/gi, "development")
-    .replace(/\bmanagment\b/gi, "management")
-    .replace(/\bteh\b/gi, "the")
-    .replace(/\brecieve\b/gi, "receive")
-    .replace(/\bseperate\b/gi, "separate")
-    .replace(/\bdefinately\b/gi, "definitely")
-    .replace(/\s+([.,;:!%?])/g, "$1")
-    .replace(/(\w)-\s+(\w)/g, "$1-$2")
-    .replace(/\b(\w+)\s+([.,;:!%?])/g, "$1$2")
-    .replace(/\bbus\s+iness\b/gi, "business")
-    .replace(/\bmethod\s+ologies\b/gi, "methodologies")
-    .replace(/\bvisual\s*-\s*ization\b/gi, "visualization")
-    .replace(/\bimprove\s+d\b/gi, "improved")
-    .replace(/\boptimise\b/gi, "optimize")
-    .trim();
-}
-
-function ensurePdfSummaryRole(summary, targetRole, skills) {
-  const cleanSummary = hardenPdfText(summary);
-  const role = hardenPdfText(targetRole);
-  if (!role || roleAppearsInPdfText(role, cleanSummary)) return cleanSummary;
-  const skillText = uniquePdfSkillItems(skills).slice(0, 4).join(", ");
-  const suffix = skillText ? ` with experience in ${skillText}` : "";
-  return `${role}${suffix}. ${lowerFirstPdf(cleanSummary)}`.trim();
-}
-
-function inferPdfTargetRole(resume) {
-  const candidates = [
-    resume.targetRole,
-    ...(resume.experience || []).map((item) => item.title),
-    ...(resume.projects || []).map((item) => item.title),
-  ];
-  return candidates.map(hardenPdfText).find((item) => item && !/\b(project|platform|system|website)\b/i.test(item)) || "";
-}
-
-function inferPdfHardSkills(resume = {}) {
-  const text = hardenPdfText([
-    resume.skills,
-    resume.summary,
-    ...(resume.experience || []).flatMap((item) => [item.title, item.bullets]),
-    ...(resume.projects || []).flatMap((item) => [item.title, item.subtitle, item.bullets]),
-  ].join(" "));
-  const lower = text.toLowerCase();
-  return PDF_KNOWN_HARD_SKILLS.filter((skill) => lower.includes(skill.toLowerCase().replace(".js", ""))).join(", ");
-}
-
-function uniquePdfSkillItems(value) {
-  const seen = new Set();
-  return hardenPdfText(value)
-    .replace(/^(hard skills|soft skills|languages|frontend|backend|database|tools|domain skills)\s*:/i, "")
-    .split(/,|\n|;/)
-    .map((item) => item.trim())
-    .filter((item) => {
-      const key = item.toLowerCase().replace(/[^a-z0-9+#.]/g, "");
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
-function uniquePdfLines(lines) {
-  const seen = new Set();
-  return lines.filter((line) => {
-    const key = hardenPdfText(line).toLowerCase();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function roleAppearsInPdfText(role, text) {
-  const cleanRole = pdfClean(role).replace(/\blabourer\b/g, "laborer");
-  const cleanText = pdfClean(text).replace(/\blabourer\b/g, "laborer");
-  return cleanRole && cleanText.includes(cleanRole);
-}
-
-function pdfSimilarity(a, b) {
-  const left = pdfKeywordSet(a);
-  const right = pdfKeywordSet(b);
-  if (!left.size || !right.size) return 0;
-  return [...left].filter((word) => right.has(word)).length / Math.min(left.size, right.size);
-}
-
-function pdfKeywordSet(value) {
-  return new Set(pdfClean(value).split(" ").filter((word) => word.length > 3 && !["with", "using", "through", "including", "application", "applications", "project"].includes(word)));
-}
-
-function pdfClean(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function lowerFirstPdf(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  // If the word looks like an acronym or is all uppercase, don't lower it
-  if (text.length > 1 && text === text.toUpperCase()) return text;
-  return text.charAt(0).toLowerCase() + text.slice(1);
-}
-
-function pdfPastTense(value) {
-  const verbs = {
-    deploy: "deployed",
-    integrate: "integrated",
-    design: "designed",
-    develop: "developed",
-    optimize: "optimized",
-    enhance: "enhanced",
-    configure: "configured",
-    deliver: "delivered",
-    engineer: "engineered",
-    implement: "implemented",
-    build: "built",
-    create: "created",
-    manage: "managed",
-    support: "supported",
-    maintain: "maintained",
-    prepare: "prepared",
-    assist: "assisted",
-    coordinate: "coordinated",
-    perform: "performed",
-    reduce: "reduced",
-    increase: "increased",
-    launch: "launched",
-    analyze: "analyzed",
-    automate: "automated",
-  };
-  return verbs[String(value || "").toLowerCase()] || value;
-}
-
-function uniquePdfCertifications(items = []) {
-  const seen = new Set();
-  return items.filter((item) => {
-    const key = pdfText([item.title, item.issuer].filter(Boolean).join(" "));
-    if (!key || seen.has(key.toLowerCase())) return false;
-    seen.add(key.toLowerCase());
-    return true;
-  });
-}
-
-function compactPdfText(value, maxWords) {
-  const text = pdfText(value);
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return text;
-  return `${words.slice(0, maxWords).join(" ").replace(/[.,;:]+$/, "")}.`;
-}
-
-function buildPdfBytes(pageStreams, page, pageLinks = []) {
-  const encoder = new TextEncoder();
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-  ];
-  const pageIds = [];
-
-  pageStreams.forEach((stream, index) => {
-    const contentId = objects.length + 1;
-    const pageId = objects.length + 2;
-    pageIds.push(pageId);
-    
-    const links = pageLinks[index] || [];
-    const annots = links.length ? ` /Annots [${links.map(link => 
-      `<< /Type /Annot /Subtype /Link /Rect [${link.rect.map(fmt).join(" ")}] /Border [0 0 0] /A << /S /URI /URI (${link.url.replace(/[()]/g, "\\$&")}) >> >>`
-    ).join(" ")}]` : "";
-
-    objects.push(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${fmt(page.width)} ${fmt(page.height)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R${annots} >>`);
-  });
-
-  objects[1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
-
-  let pdf = "%PDF-1.4\n% Rover Resume PDF\n";
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets[index + 1] = encoder.encode(pdf).length;
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-  const xrefOffset = encoder.encode(pdf).length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  });
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return encoder.encode(pdf);
-}
-
-function wrapPdfLine(value, maxWidth, fontSize, bold = false) {
-  const text = pdfText(value);
-  if (!text) return [];
-  const lines = [];
-  let line = "";
-  text.split(/\s+/).forEach((word) => {
-    const candidate = line ? `${line} ${word}` : word;
-    if (estimateTextWidth(candidate, fontSize, bold) <= maxWidth) {
-      line = candidate;
-      return;
-    }
-    if (line) lines.push(line);
-    line = word;
-  });
-  if (line) lines.push(line);
-  return lines;
-}
-
-function estimateTextWidth(value, fontSize, bold = false) {
-  if (value === PDF_BULLET) return fontSize * 0.36;
-  const factor = bold ? 0.55 : 0.51; // Final calibration for edge-to-edge fill
-  const text = pdfText(value);
-  const spaceWidth = fontSize * 0.28;
-  const spaces = (String(value || "").match(/\s/g) || []).length;
-  
-  const charsWidth = text.split("").reduce((width, char) => {
-    if (char === " ") return width + spaceWidth;
-    if (/[ilI.,'|]/.test(char)) return width + fontSize * 0.23;
-    if (/[mwMW@#%&]/.test(char)) return width + fontSize * 0.85;
-    if (/[A-Z]/.test(char)) return width + fontSize * 0.66;
-    return width + fontSize * factor;
-  }, 0);
-  
-  return charsWidth + (text === value ? 0 : spaces * spaceWidth);
-}
-
-function escapePdfText(value) {
-  if (value === PDF_BULLET) return "\\225";
-  return pdfText(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/\u2022/g, "\\225");
-}
-
-function pdfText(value) {
-  return String(value || "")
-    .replace(/[\u2022\u25cf\u25aa]/g, PDF_BULLET)
-    .replace(/[\u2013\u2014]/g, "-")
-    .replace(/[\u201c\u201d]/g, '"')
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/\s+/g, " ")
-    .replace(/[^\x20-\x7E]/g, "")
-    .trim();
-}
-
-function splitPdfLines(value) {
-  return String(value || "")
-    .split(/\n|;/)
-    .map((line) => line.replace(/^[\s*\-\u2022\u25cf\u25aa]+/, "").trim())
-    .map(pdfText)
-    .filter(Boolean);
-}
-
-function fmt(value) {
-  return Number(value).toFixed(2).replace(/\.?0+$/, "");
-}
-
-function contactPdfItems(resume) {
-  return contactItems(resume)
-    .map((item) => ({
-      key: item.key,
-      url: item.href,
-      value: (item.key === "linkedin" || item.key === "github") ? item.value : (item.external ? normalizeExternalUrl(item.value) : item.value),
-    }))
-    .map((item) => ({ ...item, value: pdfText(item.value) }))
-    .filter((item) => item.value);
-}
 
 function contactItems(resume) {
   return [

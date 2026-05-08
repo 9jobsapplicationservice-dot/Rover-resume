@@ -174,3 +174,37 @@ test("normalizer removes leaked sections from ai summary output", () => {
     "Reliable and physically fit Construction Labourer with hands-on experience across residential and commercial construction sites in Melbourne. Available for immediate start.",
   );
 });
+
+test("normalizer removes duplicate skill category labels and canonical skill repeats", () => {
+  const resume = normalizeResume({
+    name: "E DUCATION MERN Stack",
+    phone: "8052869880",
+    email: "as7612399@gmail.com",
+    summary: "Automation Engineer and MERN Stack Developer with practical full-stack and automation experience.",
+    skills: [
+      "Languages: HTML5, CSS3, Tailwind CSS, SQL, HTML, CSS",
+      "Frontend: Frontend, Bootstrap, React.js, Next.js",
+      "Backend: Backend, Node.js, Express.js, REST APIs",
+      "Database: Database, MongoDB",
+      "Tools: TECHNICAL SKILLS, Automation & Tools, Selenium WebDriver, ChromeDriver, Git, GitHub, VS Code, Antigravity, Selenium",
+    ].join("\n"),
+    experience: [{ title: "Automation Engineer", company: "9 JOBS Application Services", dates: "Dec 2025 - Present", bullets: "Automated workflows using Selenium WebDriver and ChromeDriver." }],
+    projects: [],
+    education: [{ school: "Integral University", degree: "BCA", dates: "2019 - 2022" }],
+  });
+
+  assert.doesNotMatch(resume.skills, /Frontend:\s*Frontend/i);
+  assert.doesNotMatch(resume.skills, /Backend:\s*Backend/i);
+  assert.doesNotMatch(resume.skills, /Database:\s*Database/i);
+  assert.doesNotMatch(resume.skills, /TECHNICAL SKILLS|Automation & Tools/i);
+  const languagesLine = resume.skills.split("\n").find((line) => /^Languages:/i.test(line)) || "";
+  assert.match(languagesLine, /HTML5, CSS3, SQL/i);
+  assert.doesNotMatch(languagesLine.replace(/^Languages:\s*/i, ""), /(?:^|,\s*)HTML(?:,|$)/i);
+  assert.doesNotMatch(languagesLine.replace(/^Languages:\s*/i, ""), /(?:^|,\s*)CSS(?:,|$)/i);
+  assert.match(resume.skills, /Languages: HTML5, CSS3, SQL/i);
+  assert.match(resume.skills, /Frontend: Tailwind CSS, Bootstrap, React\.js, Next\.js/i);
+  assert.match(resume.skills, /Backend: Node\.js, Express\.js, REST APIs/i);
+  assert.match(resume.skills, /Database: MongoDB/i);
+  assert.match(resume.skills, /Tools: Selenium WebDriver, ChromeDriver, Git, GitHub, VS Code, Antigravity, Selenium/i);
+});
+

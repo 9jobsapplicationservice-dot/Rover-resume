@@ -32,15 +32,15 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
 });
 
 export default function middleware(request, event) {
-  if (!clerkReady()) {
-    if (isProtectedApi(request)) {
-      return NextResponse.json(
-        { error: "Authentication is unavailable. Clerk keys are not configured." },
-        { status: 401 },
-      );
-    }
-
+  if (!isProtectedApi(request)) {
     return NextResponse.next();
+  }
+
+  if (!clerkReady()) {
+    return NextResponse.json(
+      { error: "Authentication is unavailable. Clerk keys are not configured." },
+      { status: 401 },
+    );
   }
 
   return clerkAuthMiddleware(request, event);

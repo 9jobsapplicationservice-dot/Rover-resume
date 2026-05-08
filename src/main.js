@@ -385,6 +385,16 @@ function contactLinks(resume) {
   ].filter(Boolean);
 }
 
+function contactPdfItems(resume) {
+  return [
+    resume.phone ? { key: "phone", value: resume.phone } : null,
+    resume.email ? { key: "email", value: resume.email } : null,
+    resume.location ? { key: "location", value: resume.location } : null,
+    resume.linkedin || linkByType(resume.links, "linkedin") ? { key: "linkedin", value: "LinkedIn" } : null,
+    resume.github || linkByType(resume.links, "github") ? { key: "github", value: "GitHub" } : null,
+  ].filter(Boolean);
+}
+
 function linkByType(value, type) {
   return String(value || "").split("|").map((item) => item.trim()).find((item) => item.toLowerCase().includes(type)) || "";
 }
@@ -524,10 +534,10 @@ const SKILL_CATEGORY_ORDER = [
 
 const SKILL_CATEGORY_KEYWORDS = {
   Languages: ["javascript", "typescript", "python", "java", "c++", "c#", "php", "ruby", "go", "html", "css", "sql", "dax"],
-  Frontend: ["react", "next", "vue", "angular", "frontend", "responsive", "tailwind", "bootstrap", "html", "css", "redux", "ui", "cross-browser"],
+  Frontend: ["react", "next", "vue", "angular", "frontend", "responsive", "tailwind", "bootstrap", "redux", "ui", "cross-browser"],
   Backend: ["node", "express", "api", "rest", "restful", "backend", "mern", "authentication", "server", "scalable", "debugging"],
   Database: ["mongodb", "mongo db", "mysql", "postgresql", "postgres", "sql server", "database"],
-  Tools: ["git", "github", "visual studio", "vs code", "power bi", "excel", "jira", "confluence", "servicenow", "sharepoint", "agile", "scrum", "sdlc", "kanban", "deployment", "testing", "debugging"],
+  Tools: ["selenium", "webdriver", "chromedriver", "chrome driver", "git", "github", "visual studio", "vs code", "power bi", "excel", "jira", "confluence", "servicenow", "sharepoint", "agile", "scrum", "sdlc", "kanban", "deployment", "testing", "debugging", "antigravity"],
 };
 
 function skillGroups(value) {
@@ -578,14 +588,14 @@ function parseSkillItems(value) {
   return normalizeSkillCategoryBoundaries(value)
     .replace(/[â€¢â—â–ª]/g, "\n")
     .split(/\n|;|,(?=\s*[\w#+])/)
-    .map((item) => item.replace(/^(Languages|Frontend|Backend|Database|Tools)\s*:\s*/i, ""))
+    .map((item) => item.replace(/^(Languages|Frontend|Backend|Database|Tools|Technology|Technologies|Technical Skills|Technical|Hard Skills|Core Skills|Soft Skills|Domain Skills|Automation\s*&\s*Tools)\s*:?\s*/i, ""))
     .map((item) => cleanSkill(item.replace(/^[*-]\s*/, "")))
     .filter(Boolean);
 }
 
 function normalizeSkillCategoryBoundaries(value) {
   return String(value || "")
-    .replace(/(Languages|Frontend|Backend|Database|Tools|Technology|Technologies|Technical|Methodologies|Methods)\s*:/gi, (match, label, offset) => `${offset > 0 ? "\n" : ""}${label}:`);
+    .replace(/(Languages|Frontend|Backend|Database|Tools|Technology|Technologies|Technical Skills|Technical|Hard Skills|Core Skills|Soft Skills|Domain Skills|Automation\s*&\s*Tools|Methodologies|Methods)\s*:/gi, (match, label, offset) => (offset > 0 ? "\n" : "") + label + ":");
 }
 
 function autoGroupSkills(items) {
@@ -599,7 +609,11 @@ function autoGroupSkills(items) {
 
 function inferSkillCategory(item) {
   const key = item.toLowerCase();
-  return SKILL_CATEGORY_ORDER.find((label) => (SKILL_CATEGORY_KEYWORDS[label] || []).some((word) => key.includes(word))) || "";
+  if (/react|next|vue|angular|frontend|responsive|tailwind|bootstrap|redux|\bui\b|cross-browser/.test(key)) return "Frontend";
+  if (/node|express|api|rest|backend|mern|authentication|server|scalable/.test(key)) return "Backend";
+  if (/mongodb|mongo db|mysql|postgresql|postgres|sql server|database/.test(key)) return "Database";
+  if (/javascript|typescript|python|java|c\+\+|c#|php|ruby|\bgo\b|html5?|css3?|\bsql\b|dax/.test(key)) return "Languages";
+  return SKILL_CATEGORY_ORDER.find((label) => (SKILL_CATEGORY_KEYWORDS[label] || []).some((word) => key.includes(word))) || "Tools";
 }
 
 function canonicalSkillCategory(value) {
@@ -627,15 +641,24 @@ function canonicalSkillCategory(value) {
 }
 
 function cleanSkill(value) {
-  return String(value || "")
+  const skill = polishTechText(String(value || "")
+    .replace(/\bhtml5\b/gi, "HTML5")
+    .replace(/\bcss3\b/gi, "CSS3")
     .replace(/\s+/g, " ")
     .replace(/^[,:|-]+|[,:|-]+$/g, "")
-    .trim();
+    .trim());
+  return isSkillHeadingOnly(skill) ? "" : skill;
+}
+
+function isSkillHeadingOnly(value) {
+  return /^(?:languages?|frontend|front end|backend|back end|database|databases|tools?|technology|technologies|technical skills?|hard skills?|core skills?|soft skills?|domain skills?|automation\s*&\s*tools)$/i.test(String(value || "").trim());
 }
 
 function skillKey(value) {
   const key = cleanSkill(value).toLowerCase().replace(/[^a-z0-9+#]+/g, "");
   const aliases = {
+    html5: "html",
+    css3: "css",
     reactjs: "react",
     nodejs: "node",
     expressjs: "express",
@@ -1625,15 +1648,21 @@ function renderTextResumePdf(doc, resume, scale = 1, dryRun = false) {
     const fontSize = options.size || 9.2;
     const lineHeight = size(options.lineHeight || fontSize * 1.15);
     const rightText = pdfText(right);
-    setFont(options.style || "bold", fontSize);
+    const leftStyle = options.style || "bold";
+    const rightStyle = options.rightStyle || "normal";
+    setFont(rightStyle, fontSize);
     const rightWidth = rightText ? doc.getTextWidth(rightText) : 0;
     const rightIsShortDate = Boolean(rightText && /^(?:[A-Z][a-z]{2}\s+)?\d{4}(?:\s*-\s*(?:Present|(?:[A-Z][a-z]{2}\s+)?\d{4}))?$/.test(rightText) && rightWidth <= size(122));
     const rightFitsColumn = Boolean(options.allowRightColumn && rightText && rightWidth <= page.contentWidth * 0.52);
     const useRightColumn = rightIsShortDate || rightFitsColumn;
     const leftMax = useRightColumn ? page.contentWidth - rightWidth - size(18) : page.contentWidth;
     doc.splitTextToSize(pdfText(left), Math.max(size(210), leftMax)).forEach((line, index) => {
+      setFont(leftStyle, fontSize);
       drawText(line, page.marginX, cursor.y);
-      if (index === 0 && useRightColumn) drawText(rightText, page.width - page.marginX, cursor.y, { align: "right" });
+      if (index === 0 && useRightColumn) {
+        setFont(rightStyle, Math.max(8.5, fontSize - 0.2));
+        drawText(rightText, page.width - page.marginX, cursor.y, { align: "right" });
+      }
       cursor.y += lineHeight;
     });
     if (rightText && !useRightColumn) {
@@ -1642,29 +1671,122 @@ function renderTextResumePdf(doc, resume, scale = 1, dryRun = false) {
     cursor.y += size(options.after || 0);
   };
   const addSection = (title) => {
-    cursor.y += size(10);
-    setFont("bold", 12);
-    drawText(pdfText(title).toUpperCase(), page.marginX, cursor.y);
-    cursor.y += size(4.2);
-    doc.setLineWidth(size(0.65));
-    drawLine(page.marginX, cursor.y, page.width - page.marginX, cursor.y);
     cursor.y += size(9);
+    setFont("bold", 11.2);
+    drawText(pdfText(title).toUpperCase(), page.marginX, cursor.y);
+    cursor.y += size(3.6);
+    doc.setLineWidth(size(0.42));
+    drawLine(page.marginX, cursor.y, page.width - page.marginX, cursor.y);
+    cursor.y += size(8);
   };
   const addBullets = (value, max = 4) => {
-    splitLines(value).slice(0, max).forEach((line) => addText(`• ${line}`, { indent: 14, size: 9.1, lineHeight: 10.7, after: 1 }));
+    splitLines(value).slice(0, max).forEach((line) => addText(`- ${line}`, { indent: 14, size: 9.1, lineHeight: 10.7, after: 1 }));
+  };
+
+  const drawContactIcon = (type, x, baselineY, iconSize = size(7.6)) => {
+    if (dryRun) return;
+    const top = baselineY - iconSize + size(1.1);
+    const unit = iconSize / 24;
+    const px = (value) => x + value * unit;
+    const py = (value) => top + value * unit;
+    doc.setDrawColor(17, 17, 17);
+    doc.setLineWidth(size(0.72));
+
+    if (type === "phone") {
+      doc.line(px(7), py(5), px(10), py(8));
+      doc.line(px(10), py(8), px(8.4), py(10.2));
+      doc.line(px(8.4), py(10.2), px(13.8), py(15.6));
+      doc.line(px(13.8), py(15.6), px(16), py(14));
+      doc.line(px(16), py(14), px(19), py(17));
+      doc.line(px(19), py(17), px(17.2), py(20));
+      doc.line(px(17.2), py(20), px(14.2), py(19));
+      doc.line(px(14.2), py(19), px(5), py(9.8));
+      doc.line(px(5), py(9.8), px(4), py(6.8));
+      doc.line(px(4), py(6.8), px(7), py(5));
+      return;
+    }
+
+    if (type === "email") {
+      doc.rect(px(3.8), py(6.2), 16.4 * unit, 11.6 * unit);
+      doc.line(px(4.7), py(7.2), px(12), py(12.4));
+      doc.line(px(19.3), py(7.2), px(12), py(12.4));
+      doc.line(px(4.8), py(16.8), px(10), py(12.7));
+      doc.line(px(19.2), py(16.8), px(14), py(12.7));
+      return;
+    }
+
+    if (type === "location") {
+      doc.circle(px(12), py(9.4), 2.1 * unit);
+      doc.line(px(12), py(21), px(7.4), py(13.6));
+      doc.line(px(12), py(21), px(16.6), py(13.6));
+      doc.line(px(7.4), py(13.6), px(6.1), py(9.6));
+      doc.line(px(16.6), py(13.6), px(17.9), py(9.6));
+      return;
+    }
+
+    if (type === "linkedin") {
+      doc.rect(px(4), py(4), 16 * unit, 16 * unit);
+      doc.line(px(8), py(10), px(8), py(17));
+      doc.line(px(11.2), py(10), px(11.2), py(17));
+      doc.line(px(11.2), py(12), px(14.2), py(10));
+      doc.line(px(14.2), py(10), px(16.6), py(12.4));
+      doc.line(px(16.6), py(12.4), px(16.6), py(17));
+      return;
+    }
+
+    doc.circle(px(12), py(12), 7.2 * unit);
+    doc.line(px(8), py(12), px(16), py(12));
+    doc.line(px(12), py(8), px(12), py(16));
+  };
+
+  const addContactRows = () => {
+    const fontSize = 8.1;
+    const iconSize = size(7.6);
+    const iconGap = size(3.5);
+    const itemGap = size(10);
+    setFont("normal", fontSize);
+    const entries = contactPdfItems(resume)
+      .map((item) => ({ ...item, value: pdfText(item.value).trim() }))
+      .filter((item) => item.value)
+      .map((item) => ({
+        ...item,
+        width: iconSize + iconGap + doc.getTextWidth(item.value),
+      }));
+    if (!entries.length) return;
+
+    const rows = [];
+    let current = [];
+    let currentWidth = 0;
+    entries.forEach((entry) => {
+      const nextWidth = currentWidth + (current.length ? itemGap : 0) + entry.width;
+      if (current.length && nextWidth > page.contentWidth) {
+        rows.push({ items: current, width: currentWidth });
+        current = [entry];
+        currentWidth = entry.width;
+      } else {
+        current.push(entry);
+        currentWidth = nextWidth;
+      }
+    });
+    if (current.length) rows.push({ items: current, width: currentWidth });
+
+    rows.slice(0, 2).forEach((row) => {
+      let x = page.marginX + Math.max(0, (page.contentWidth - row.width) / 2);
+      row.items.forEach((item, index) => {
+        if (index > 0) x += itemGap;
+        drawContactIcon(item.key, x, cursor.y, iconSize);
+        setFont("normal", fontSize);
+        drawText(item.value, x + iconSize + iconGap, cursor.y);
+        x += item.width;
+      });
+      cursor.y += size(8.7);
+    });
   };
 
   setFont("bold", 22);
   drawText(pdfText(displayName(resume.name || "Your Name")), page.width / 2, cursor.y, { align: "center" });
   cursor.y += size(12.5);
-  const contact = contactLinks(resume).map(pdfText).join("  ");
-  if (contact) {
-    setFont("normal", 8.1);
-    doc.splitTextToSize(contact, page.contentWidth).slice(0, 2).forEach((line) => {
-      drawText(line, page.width / 2, cursor.y, { align: "center" });
-      cursor.y += size(8.7);
-    });
-  }
+  addContactRows();
   cursor.y += size(5);
 
   addSection("Summary");

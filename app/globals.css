@@ -1192,7 +1192,13 @@ a {
   font-family: Georgia, "Times New Roman", serif;
   line-height: 1.28;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
-  overflow-wrap: anywhere;
+  /* ATS-Optimized Text Rendering */
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  white-space: normal;
+  letter-spacing: normal;
+  text-rendering: optimizeLegibility;
 }
 
 .paper h1 {
@@ -2065,5 +2071,100 @@ a {
   .toast {
     right: 14px;
     bottom: 14px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .rover-sidebar,
+  .workspace-headline,
+  .choice-panel,
+  .old-editor,
+  .preview-head,
+  .suggestions,
+  .premium-box,
+  .modal-backdrop,
+  .toast,
+  .topbar,
+  .actions,
+  .side-brand,
+  .side-note,
+  .eyebrow,
+  .brand,
+  aside,
+  header,
+  footer,
+  nav,
+  button,
+  input,
+  textarea,
+  .no-print {
+    display: none !important;
+  }
+
+  .rover-dashboard,
+  .rover-workspace,
+  .builder,
+  .old-builder-grid,
+  .preview-wrap,
+  .resume-preview-shell {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    position: static !important;
+    transform: none !important;
+  }
+
+  .resume-paper {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 40pt 50pt !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+    transform: none !important;
+    page-break-after: always;
+  }
+
+  .paper,
+  .paper * {
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: none !important;
+    white-space: normal !important;
+    letter-spacing: normal !important;
+    text-rendering: optimizeLegibility !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .paper h1,
+  .paper h2,
+  .paper strong {
+    color: #111 !important;
+  }
+
+  .resume-row {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
   }
 }
